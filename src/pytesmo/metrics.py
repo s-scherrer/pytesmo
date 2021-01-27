@@ -26,14 +26,12 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import division
-
 import numpy as np
 import scipy.stats as sc_stats
-from itertools import permutations,combinations
-from pytesmo.utils import array_dropna
+from itertools import permutations, combinations
 
-def bias(x, y):
+
+def bias(x, y, return_ci=False, bootstrap_ci=False):
     """
     Difference of the mean values.
     Sign of output depends on argument order.
@@ -45,13 +43,45 @@ def bias(x, y):
         First input vector.
     y : numpy.ndarray
         Second input vector.
+    return_ci : bool, optional
+        Whether to calculate and return 95% confidence intervals. Default is
+        ``False``. By default the confidence intervals are calculated by
+        assuming that `x` and `y` are iid Gaussian distributed. Alternatively
+        they can be calculated by bootstrapping.
+    bootstrap_ci : bool or int, optional
+        Whether confidence intervals should be calculated by bootstrapping.
+        By default, 1000 bootstrap samples are taken.
 
     Returns
     -------
     bias : float
         Bias between x and y.
+    ci : 2-tuple of float
+        ``(dl, du)`` so that ``(bias-dl, bias+du)`` is the 95% confidence
+        interval.
     """
-    return np.mean(x) - np.mean(y)
+    difference = x - y
+    b = np.mean(difference)
+    if not return_ci:
+        return b
+    else:
+        n = len(difference)
+        if not bootstrap_ci:
+            delta = (
+                np.std(difference, ddof=1)
+                / np.sqrt(n) * sc_stats.t.ppf(1-0.025, n)
+            )
+            ci = (-delta, delta)
+        else:
+            if isinstance(bootstrap_ci, bool):
+                bootstrap_ci = 1000
+            diff = np.random.choice(difference, size=(bootstrap_ci, n))
+            biases = np.mean(diff, axis=1)
+            ci = (
+                bias - np.quantile(biases, 0.05),
+                np.quantile(biases, 0.95) - bias
+            )
+        return b, ci
 
 
 def aad(x, y):
