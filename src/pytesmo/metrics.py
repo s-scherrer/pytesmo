@@ -26,173 +26,97 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+
 import numpy as np
-import scipy.stats as sc_stats
-from itertools import permutations, combinations
+
+from pytesmo._metric_funcs import *
 
 
-def bias(x, y, return_ci=False, bootstrap_ci=False):
+class PairwiseMetric:
     """
-    Difference of the mean values.
-    Sign of output depends on argument order.
-    We calculate mean(x) - mean(y).
+    Wrapper object for pairwise metric functions.
 
-    Parameters
-    ----------
-    x : numpy.ndarray
-        First input vector.
-    y : numpy.ndarray
-        Second input vector.
-    return_ci : bool, optional
-        Whether to calculate and return 95% confidence intervals. Default is
-        ``False``. By default the confidence intervals are calculated by
-        assuming that `x` and `y` are iid Gaussian distributed. Alternatively
-        they can be calculated by bootstrapping.
-    bootstrap_ci : bool or int, optional
-        Whether confidence intervals should be calculated by bootstrapping.
-        By default, 1000 bootstrap samples are taken.
-
-    Returns
-    -------
-    bias : float
-        Bias between x and y.
-    ci : 2-tuple of float
-        ``(dl, du)`` so that ``(bias-dl, bias+du)`` is the 95% confidence
-        interval.
+    This wraps the metrics functions for pairwise metrics in a callable object,
+    in order to pack them together with CI functions and a bootstrap function,
+    as well as to provide a common interface for all metric functions.
     """
-    difference = x - y
-    b = np.mean(difference)
-    if not return_ci:
-        return b
-    else:
-        n = len(difference)
-        if not bootstrap_ci:
-            delta = (
-                np.std(difference, ddof=1)
-                / np.sqrt(n) * sc_stats.t.ppf(1-0.025, n)
-            )
-            ci = (-delta, delta)
-        else:
-            if isinstance(bootstrap_ci, bool):
-                bootstrap_ci = 1000
-            diff = np.random.choice(difference, size=(bootstrap_ci, n))
-            biases = np.mean(diff, axis=1)
-            ci = (
-                bias - np.quantile(biases, 0.05),
-                np.quantile(biases, 0.95) - bias
-            )
-        return b, ci
+
+    def __init__(self, metric_func, ci_func=None):
+        """
+        Parameters
+        ----------
+        metric_func : callable
+            Function that calculates the metric for two 1-dimensional arrays.
+            Signature: ``(x : np.ndarray, y : np.ndarray, **kwargs) -> float``
+        ci_func : callable, optional
+            Function that calculates confidence intervals using a analytical
+            formula (and typically assuming x and y iid Gaussian). Based on
+            this, the attribute ``has_ci`` is set. Default is None.
+            Signature: ``(x : np.ndarray, y : np.ndarray, alpha=0.05 : float,
+            **kwargs) -> float, float``, where the first return value is the
+            distance from the metric value to the lower confidence bound, and
+            the second return value is the distance from the metric value to
+            the upper confidence bound.
+        """
+
+        self.metric_func = metric_func
+        if hasattr(self.metric_func, "__doc__") and self.metric_func.__doc__:
+            self.__doc__ = self.metric_func.__doc__
+        self.ci_func = ci_func
+        self.has_ci = ci_func is not None
+
+    def __call__(self, x, y, **kwargs):
+        return self.metric_func(x, y, **kwargs)
+
+    def ci(self, x, y, alpha=0.05, **kwargs):
+        """
+        Calculates CI of metric using analytical formula.
+
+        Parameters
+        ----------
+        x : np.ndarray
+        y : np.ndarray
+        alpha : float, optional
+            Confidence level, default is 0.05.
+        """
+        if not self.has_ci:
+            raise ValueError("This metric has no analytical CI implemented.")
+        return self.ci_func(x, y, alpha, **kwargs)
+
+    def bootstrap_ci(self, x, y, alpha=0.05, n_samples=1000, **kwargs):
+        """
+        Calculates CI of metric by bootstrapping
+
+        Parameters
+        ----------
+        x : np.ndarray
+        y : np.ndarray
+        alpha : float, optional
+            Confidence level, default is 0.05.
+        n_samples : int, optional
+            Number of bootstrap samples, default is 1000. Each sample is
+            created by pairwise sampling ``len(x)`` times from `x` and `y`.
+        """
+        # inefficient prototype!
+        m = []
+        n = len(x)
+        for i in range(n_samples):
+            idx = np.random.choice(n, size=n)
+            _x, _y = x[idx], y[idx]
+            m.append(self.metric_func)
+        lower = np.quantile(m, alpha/2)
+        upper = np.quantile(m, 1-alpha/2)
+        return lower, upper
 
 
-def aad(x, y):
-    """
-    Average (=mean) absolute deviation (AAD).
-
-    Parameters
-    ----------
-    x : numpy.ndarray
-        First input vector.
-    y : numpy.ndarray
-        Second input vector.
-
-    Returns
-    -------
-    d : float
-        Mean absolute deviation.
-    """
-    return np.mean(np.abs(x - y))
-
-
-def mad(x, y):
-    """
-    Median absolute deviation (MAD).
-
-    Parameters
-    ----------
-    x : numpy.ndarray
-        First input vector.
-    y : numpy.ndarray
-        Second input vector.
-
-    Returns
-    -------
-    d : float
-        Median absolute deviation.
-    """
-    return np.median(np.abs(x - y))
-
-
-def rmsd(x, y, ddof=0):
-    """
-    Root-mean-square deviation (RMSD). It is implemented for an unbiased
-    estimator, which means the RMSD is the square root of the variance, also
-    known as the standard error. The delta degree of freedom keyword (ddof) can
-    be used to correct for the case the true variance is unknown and estimated
-    from the population. Concretely, the naive sample variance estimator sums
-    the squared deviations and divides by n, which is biased. Dividing instead
-    by n -1 yields an unbiased estimator
-
-    Parameters
-    ----------
-    x : numpy.ndarray
-        First input vector.
-    y : numpy.ndarray
-        Second input vector.
-    ddof : int, optional
-        Delta degree of freedom.The divisor used in calculations is N - ddof,
-        where N represents the number of elements. By default ddof is zero.
-
-    Returns
-    -------
-    rmsd : float
-        Root-mean-square deviation.
-    """
-    return np.sqrt(RSS(x, y) / (len(x) - ddof))
-
-
-def nrmsd(x, y, ddof=0):
-    """
-    Normalized root-mean-square deviation (nRMSD).
-
-    Parameters
-    ----------
-    x : numpy.ndarray
-        First input vector.
-    y : numpy.ndarray
-        Second input vector.
-    ddof : int, optional
-        Delta degree of freedom.The divisor used in calculations is N - ddof,
-        where N represents the number of elements. By default ddof is zero.
-
-    Returns
-    -------
-    nrmsd : float
-        Normalized root-mean-square deviation (nRMSD).
-    """
-    return rmsd(x, y, ddof) / (np.max([x, y]) - np.min([x, y]))
-
-
-def ubrmsd(x, y, ddof=0):
-    """
-    Unbiased root-mean-square deviation (uRMSD).
-
-    Parameters
-    ----------
-    x : numpy.ndarray
-        First input vector.
-    y : numpy.ndarray
-        Second input vector.
-    ddof : int, optional
-        Delta degree of freedom.The divisor used in calculations is N - ddof,
-        where N represents the number of elements. By default ddof is zero.
-
-    Returns
-    -------
-    urmsd : float
-        Unbiased root-mean-square deviation (uRMSD).
-    """
-    return np.sqrt(np.sum(((x - np.mean(x)) -
-                           (y - np.mean(y))) ** 2) / (len(x) - ddof))
+bias = PairwiseMetric(bias_func, ci_func=bias_ci)
+rmsd = PairwiseMetric(rmsd_func, ci_func=rmsd_ci)
+nrmsd = PairwiseMetric(nrmsd_func, ci_func=nrmsd_ci)
+ubrmsd = PairwiseMetric(ubrmsd_func, ci_func=ubrmsd_ci)
+# no analytical CI available for aad and mad due to difficult distribution of
+# absolute difference.
+aad = PairwiseMetric(aad_func)
+mad = PairwiseMetric(mad_func)
 
 
 def mse(x, y, ddof=0):
@@ -218,6 +142,10 @@ def mse(x, y, ddof=0):
     ddof : int, optional
         Delta degree of freedom.The divisor used in calculations is N - ddof,
         where N represents the number of elements. By default ddof is zero.
+    return_ci : bool, optional
+        Whether to calculate and return 95% confidence intervals. Default is
+        ``False``. The confidence intervals are calculated by assuming that `x`
+        and `y` are iid Gaussian distributed.
 
     Returns
     -------
@@ -578,25 +506,6 @@ def nash_sutcliffe(o, p):
         Nash Sutcliffe model efficiency coefficient E.
     """
     return 1 - (np.sum((o - p) ** 2)) / (np.sum((o - np.mean(o)) ** 2))
-
-
-def RSS(o, p):
-    """
-    Residual sum of squares.
-
-    Parameters
-    ----------
-    o : numpy.ndarray
-        Observations.
-    p : numpy.ndarray
-        Predictions.
-
-    Returns
-    -------
-    res : float
-        Residual sum of squares.
-    """
-    return np.sum((o - p) ** 2)
 
 
 def pearsonr(x, y):
