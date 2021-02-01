@@ -58,19 +58,9 @@ Currently available pairwise metrics::
 * ``pytesmo.metrics.index_of_agreement``, only bootstrap CI
 
 
-Triple metrics are instances of
-:class:`pytesmo.metrics.TripleCollocationMetric`.  Here, only bootstrap CIs are
-available.
-
-Currently available triple metrics are:
-
-* ``pytesmo.metrics.tca_error``
-* ``pytesmo.metrics.tca_snr``
-* ``pytesmo.metrics.tca_beta``
-
+Triple collocation metrics are all calculated with `tca_metrics` to avoid
+recalculation of the covariance matrix.
 """
-
-
 
 from itertools import permutations, combinations
 import numpy as np
@@ -78,6 +68,10 @@ from scipy import stats
 
 from pytesmo._metric_funcs import *
 from pytesmo.utils import deprecated
+
+
+# minimum amount of samples required to do bootstrapping
+_minimum_samples_for_bootstrap = 10
 
 
 class PairwiseMetric:
@@ -152,6 +146,11 @@ class PairwiseMetric:
         # inefficient prototype!
         m = []
         n = len(x)
+        if n < _minimum_samples_for_bootstrap:
+            raise ValueError(
+                "Not enough data for bootstrapping. Your data should contain"
+                f" at least {_minimum_samples_for_bootstrap} samples."
+            )
         for i in range(n_samples):
             idx = np.random.choice(n, size=n)
             _x, _y = x[idx], y[idx]
@@ -182,70 +181,175 @@ nash_sutcliffe = PairwiseMetric(nash_sutcliffe_func)
 index_of_agreement = PairwiseMetric(index_of_agreement_func)
 
 
-class TripleCollocationMetric:
+@np.errstate(invalid="ignore")
+def tca_metrics(x, y, z, ref_ind=0):
     """
-    Wrapper class for TCA metric functions.
+    Triple collocation based estimation of signal-to-noise ratio, absolute
+    errors, and rescaling coefficients
 
-    This wraps the metrics functions for TCA metrics in a callable object,
-    in order to pack them together with a bootstrap function, as well as to
-    provide a common interface for all TCA metric functions.
+    Parameters
+    ----------
+    x: 1D numpy.ndarray
+        first input dataset
+    y: 1D numpy.ndarray
+        second input dataset
+    z: 1D numpy.ndarray
+        third input dataset
+    ref_ind: int
+        Index of reference data set for estimating scaling
+        coefficients. Default: 0 (x)
+
+    Returns
+    -------
+    snr: numpy.ndarray
+        signal-to-noise (variance) ratio [dB]
+    err_std: numpy.ndarray
+        **SCALED** error standard deviation
+    beta: numpy.ndarray
+         scaling coefficients (i_scaled = i * beta_i)
+
+    Notes
+    -----
+
+    This function estimates the triple collocation errors, the scaling
+    parameter :math:`\\beta` and the signal to noise ratio directly from the
+    covariances of the dataset. For a general overview and how this function
+    and :py:func:`pytesmo.metrics.tcol_error` are related please see
+    [Gruber2015]_.
+
+    Estimation of the error variances from the covariances of the datasets
+    (e.g. :math:`\\sigma_{XY}` for the covariance between :math:`x` and
+    :math:`y`) is done using the following formula:
+
+    .. math::
+
+       \\sigma_{\\varepsilon_x}^2 =
+           \\sigma_{X}^2 - \\frac{\\sigma_{XY}\\sigma_{XZ}}{\\sigma_{YZ}}
+    .. math::
+
+       \\sigma_{\\varepsilon_y}^2 =
+           \\sigma_{Y}^2 - \\frac{\\sigma_{YX}\\sigma_{YZ}}{\\sigma_{XZ}}
+    .. math::
+
+       \\sigma_{\\varepsilon_z}^2 =
+           \\sigma_{Z}^2 - \\frac{\\sigma_{ZY}\\sigma_{ZX}}{\\sigma_{YX}}
+
+    :math:`\\beta` can also be estimated from the covariances:
+
+    .. math:: \\beta_x = 1
+    .. math:: \\beta_y = \\frac{\\sigma_{XZ}}{\\sigma_{YZ}}
+    .. math:: \\beta_z=\\frac{\\sigma_{XY}}{\\sigma_{ZY}}
+
+    The signal to noise ratio (SNR) is also calculated from the variances
+    and covariances:
+
+    .. math::
+
+       \\text{SNR}_X[dB] = -10\\log\\left(\\frac{\\sigma_{X}^2\\sigma_{YZ}}
+                                         {\\sigma_{XY}\\sigma_{XZ}}-1\\right)
+    .. math::
+
+       \\text{SNR}_Y[dB] = -10\\log\\left(\\frac{\\sigma_{Y}^2\\sigma_{XZ}}
+                                         {\\sigma_{YX}\\sigma_{YZ}}-1\\right)
+    .. math::
+
+       \\text{SNR}_Z[dB] = -10\\log\\left(\\frac{\\sigma_{Z}^2\\sigma_{XY}}
+                                         {\\sigma_{ZX}\\sigma_{ZY}}-1\\right)
+
+    It is given in dB to make it symmetric around zero. If the value is zero
+    it means that the signal variance and the noise variance are equal. +3dB
+    means that the signal variance is twice as high as the noise variance.
+
+    References
+    ----------
+    .. [Gruber2015] Gruber, A., Su, C., Zwieback, S., Crow, W., Dorigo, W.,
+       Wagner, W.  (2015). Recent advances in (soil moisture) triple
+       collocation analysis.  International Journal of Applied Earth
+       Observation and Geoinformation, in review
     """
 
-    def __init__(self, metric_func):
-        """
-        Parameters
-        ----------
-        metric_func : callable
-            Function that calculates the metric for two 1-dimensional arrays.
-            Signature: ``(x : np.ndarray, y : np.ndarray, z : np.ndarray,
-            **kwargs) -> float, float, float``
-        """
+    cov = np.cov(np.vstack((x, y, z)))
 
-        self.metric_func = metric_func
-        if hasattr(self.metric_func, "__doc__") and self.metric_func.__doc__:
-            self.__doc__ = self.metric_func.__doc__
+    ind = (0, 1, 2, 0, 1, 2)
+    no_ref_ind = np.where(np.arange(3) != ref_ind)[0]
 
-    def __call__(self, x, y, z, **kwargs):
-        return self.metric_func(x, y, z, **kwargs)
+    snr = 10 * np.log10(
+        [
+            (
+                (cov[i, i] * cov[ind[i + 1], ind[i + 2]])
+                / (cov[i, ind[i + 1]] * cov[i, ind[i + 2]])
+                - 1
+            )
+            ** (-1)
+            for i in np.arange(3)
+        ]
+    )
+    err_var = np.array(
+        [
+            cov[i, i]
+            - (cov[i, ind[i + 1]] * cov[i, ind[i + 2]])
+            / cov[ind[i + 1], ind[i + 2]]
+            for i in np.arange(3)
+        ]
+    )
 
-    def bootstrap_ci(self, x, y, z, alpha=0.05, n_samples=1000, **kwargs):
-        """
-        Calculates CI of metric by bootstrapping
+    beta = np.array(
+        [
+            cov[ref_ind, no_ref_ind[no_ref_ind != i][0]]
+            / cov[i, no_ref_ind[no_ref_ind != i][0]]
+            if i != ref_ind
+            else 1
+            for i in np.arange(3)
+        ]
+    )
 
-        Parameters
-        ----------
-        x : np.ndarray
-        y : np.ndarray
-        alpha : float, optional
-            Confidence level, default is 0.05.
-        n_samples : int, optional
-            Number of bootstrap samples, default is 1000. Each sample is
-            created by pairwise sampling ``len(x)`` times from `x` and `y`.
-
-        Returns
-        -------
-        lower : array
-            Array of length 3 containing lower bounds of the metris CIs
-        upper : array
-            Array of length 3 containing upper bounds of the metris CIs
-        """
-        # inefficient prototype!
-        m = []
-        n = len(x)
-        for i in range(n_samples):
-            idx = np.random.choice(n, size=n)
-            _x, _y, _z = x[idx], y[idx], z[idx]
-            m.append(self.metric_func(_x, _y, _z))
-        m = np.asarray(m)
-        lower = np.quantile(m, alpha / 2, axis=0)
-        upper = np.quantile(m, 1 - alpha / 2, axis=0)
-        return lower, upper
+    return snr, np.sqrt(err_var) * beta, beta
 
 
-tca_error = TripleCollocationMetric(tca_error_func)
-tca_error_scaled = TripleCollocationMetric(tca_error_scaled_func)
-tca_snr = TripleCollocationMetric(tca_snr_func)
-tca_beta = TripleCollocationMetric(tca_beta_func)
+def bootstrap_tca_metrics_ci(x, y, z, ref_ind=0, alpha=0.05, n_samples=1000):
+    """
+    Confidence intervals for TCA metrics via bootstrapping.
+
+    Parameters
+    ----------
+    x, y, z : np.ndarray
+        1D arrays of data
+    ref_ind : int, optional
+        Index of reference data set for estimating scaling
+        coefficients. Default is 0 (x)
+    alpha : float, optional
+        Confidence level, default is 0.05
+    n_samples : int, optional
+        Number of bootstrap samples, default is 1000
+
+    Returns
+    -------
+    snr_ci, err_std_ci, beta_ci : tuple
+        Each CI is a tuple of arrays of length 3. The first tuple entry is the
+        lower CI bound for all three datasets, the second entry the upper CI
+        bound for all three datasets. Example::
+
+            snr_ci = ([lower_snr_ci_x, lower_snr_ci_y, lower_snr_ci_z],
+                      [upper_snr_ci_x, upper_snr_ci_y, upper_snr_ci_z])
+
+    """
+    # inefficient prototype, maybe we should use Cython for this
+    m = []
+    n = len(x)
+    if n < _minimum_samples_for_bootstrap:
+        raise ValueError(
+            "Not enough data for bootstrapping. Your data should contain at"
+            " least " + str(_minimum_samples_for_bootstrap) + " samples."
+        )
+    for i in range(n_samples):
+        idx = np.random.choice(n, size=n)
+        _x, _y, _z = x[idx], y[idx], z[idx]
+        m.append(tca_metrics(_x, _y, _z, ref_ind))
+    # m has shape (n_samples, n_metrics, 3) (actually, n_metrics == 3)
+    m = np.asarray(m)
+    lower = np.quantile(m, alpha / 2, axis=0)
+    upper = np.quantile(m, 1 - alpha / 2, axis=0)
+    return tuple((lower[i, :], upper[i, :]) for i in range(3))
 
 
 @deprecated
