@@ -26,6 +26,51 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+"""
+Implementation of pairwise and triple metrics for validation.
+
+Pairwise metrics are instances of :class:`pytesmo.metrics.PairwiseMetric`. They
+are callables, but also provide the methods
+:method:`pytesmo.metrics.PairwiseMetric.ci` and
+:method:`pytesmo:metrics.PairwiseMetric.bootstrap_ci` to calculate confidence
+intervals. The former is only availabe for some functions, use the attribute
+`has_ci` to check whether it's available.
+
+Note: To access the docstring of the metric function that is used, use
+``help(<metric>.metric_func)``.
+
+Currently available pairwise metrics::
+
+* ``pytesmo.metrics.bias``, has analytical CI
+* ``pytesmo.metrics.rmsd``, has analytical CI
+* ``pytesmo.metrics.nrmsd``, has analytical CI
+* ``pytesmo.metrics.ubrmsd``, has analytical CI
+* ``pytesmo.metrics.mean_square_error``, has analytical CI
+* ``pytesmo.metrics.mse_corr``, only bootstrap CI
+* ``pytesmo.metrics.mse_var``, only bootstrap CI
+* ``pytesmo.metrics.mse_bias``, has analytical CI
+* ``pytesmo.metrics.pearson_r``, has analytical CI
+* ``pytesmo.metrics.spearman_r``, has analytical CI
+* ``pytesmo.metrics.kendall_tau``, has analytical CI
+* ``pytesmo.metrics.aad``, only bootstrap CI
+* ``pytesmo.metrics.mad``, only bootstrap CI
+* ``pytesmo.metrics.nash_sutcliffe``, only bootstrap CI
+* ``pytesmo.metrics.index_of_agreement``, only bootstrap CI
+
+
+Triple metrics are instances of
+:class:`pytesmo.metrics.TripleCollocationMetric`.  Here, only bootstrap CIs are
+available.
+
+Currently available triple metrics are:
+
+* ``pytesmo.metrics.tca_error``
+* ``pytesmo.metrics.tca_snr``
+* ``pytesmo.metrics.tca_beta``
+
+"""
+
+
 
 from itertools import permutations, combinations
 import numpy as np
@@ -62,8 +107,6 @@ class PairwiseMetric:
         """
 
         self.metric_func = metric_func
-        if hasattr(self.metric_func, "__doc__") and self.metric_func.__doc__:
-            self.__doc__ = self.metric_func.__doc__
         self.ci_func = ci_func
         self.has_ci = ci_func is not None
 
@@ -199,8 +242,17 @@ class TripleCollocationMetric:
         return lower, upper
 
 
+tca_error = TripleCollocationMetric(tca_error_func)
+tca_error_scaled = TripleCollocationMetric(tca_error_scaled_func)
+tca_snr = TripleCollocationMetric(tca_snr_func)
+tca_beta = TripleCollocationMetric(tca_beta_func)
+
+
+@deprecated
 def tcol_error(x, y, z):
     """
+    DEPRECATED: Use ``pytesmo.metrics.tca_error`` instead.
+
     Triple collocation error estimate of three calibrated/scaled
     datasets.
 
@@ -251,8 +303,12 @@ def tcol_error(x, y, z):
 
 
 @np.errstate(invalid="ignore")
+@deprecated
 def tcol_snr(x, y, z, ref_ind=0):
     """
+    DEPRECATED: Use the functions `tca_snr`, `tca_error_scaled`, and `tca_beta`
+    instead.
+
     Triple collocation based estimation of signal-to-noise ratio, absolute
     errors, and rescaling coefficients
 
@@ -666,8 +722,13 @@ def mse(x, y, ddof=0):
 @deprecated
 def pearsonr(x, y):
     """
+    DEPRECATED: use :func:`pytesmo.metrics.pearson_r` instead if you want
+    only the value or the confidence interval, and
+    :func:`scipy.stats.pearsonr` if you want the p-value.
+
     Wrapper for scipy.stats.pearsonr. Calculates a Pearson correlation
     coefficient and the p-value for testing non-correlation.
+
     Parameters
     ----------
     x : numpy.ndarray
@@ -693,6 +754,10 @@ def pearsonr_recursive(
     x, y, n_old=0, sum_xi_yi=0, sum_xi=0, sum_yi=0, sum_x2=0, sum_y2=0
 ):
     """
+    DEPRECATED: use :func:`pytesmo.metrics.pearson_r` instead if you want
+    only the value or the confidence interval, and
+    :func:`scipy.stats.pearsonr` if you want the p-value.
+
     Calculate pearson correlation in a recursive manner based on
     .. math::
 
@@ -748,10 +813,13 @@ def pearsonr_recursive(
 @deprecated
 def pearson_conf(r, n, c=95):
     """
+    DEPRECATED: use :func:`pytesmo.metrics.pearson_r` instead.
+
     Calcalates the confidence interval of a given pearson
     correlation coefficient using a fisher z-transform,
     only valid for correlation coefficients calculated from
     a bivariate normal distribution
+
     Parameters
     ----------
     r : float or numpy.ndarray
@@ -785,9 +853,14 @@ def pearson_conf(r, n, c=95):
 @deprecated
 def spearmanr(x, y):
     """
+    DEPRECATED: use :func:`pytesmo.metrics.spearman_r` instead if you
+    want only the value or the confidence interval, and
+    :func:`scipy.stats.spearmanr` if you want the p-value.
+
     Wrapper for scipy.stats.spearmanr. Calculates a Spearman
     rank-order correlation coefficient and the p-value to
     test for non-correlation.
+
     Parameters
     ----------
     x : numpy.array
@@ -811,7 +884,12 @@ def spearmanr(x, y):
 @deprecated
 def kendalltau(x, y):
     """
+    DEPRECATED: use :func:`pytesmo.metrics.kendall_tau` instead if you want
+    only the value or the confidence interval, and
+    :func:`scipy.stats.kendalltau` if you want the p-value.
+
     Wrapper for scipy.stats.kendalltau
+
     Parameters
     ----------
     x : numpy.array
