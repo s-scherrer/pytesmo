@@ -54,9 +54,8 @@ class PairwiseMetric:
             this, the attribute ``has_ci`` is set. Default is None.
             Signature: ``(x : np.ndarray, y : np.ndarray, alpha=0.05 : float,
             **kwargs) -> float, float``, where the first return value is the
-            distance from the metric value to the lower confidence bound, and
-            the second return value is the distance from the metric value to
-            the upper confidence bound.
+            the lower confidence bound, and the second return value is the
+            upper confidence bound.
         """
 
         self.metric_func = metric_func
@@ -103,7 +102,7 @@ class PairwiseMetric:
         for i in range(n_samples):
             idx = np.random.choice(n, size=n)
             _x, _y = x[idx], y[idx]
-            m.append(self.metric_func)
+            m.append(self.metric_func(_x, _y))
         lower = np.quantile(m, alpha/2)
         upper = np.quantile(m, 1-alpha/2)
         return lower, upper
@@ -113,58 +112,21 @@ bias = PairwiseMetric(bias_func, ci_func=bias_ci)
 rmsd = PairwiseMetric(rmsd_func, ci_func=rmsd_ci)
 nrmsd = PairwiseMetric(nrmsd_func, ci_func=nrmsd_ci)
 ubrmsd = PairwiseMetric(ubrmsd_func, ci_func=ubrmsd_ci)
+mse = PairwiseMetric(mse_func, ci_func=mse_ci)
+mse_bias = PairwiseMetric(mse_bias_func, ci_func=mse_bias_ci)
+pearsonr = PairwiseMetric(pearsonr_func, ci_func=pearsonr_ci)
+spearmanr = PairwiseMetric(spearmanr_func, ci_func=spearmanr_ci)
+kendalltau = PairwiseMetric(kendalltau_func, ci_func=kendalltau_ci)
 # no analytical CI available for aad and mad due to difficult distribution of
 # absolute difference.
 aad = PairwiseMetric(aad_func)
 mad = PairwiseMetric(mad_func)
+# no analytical CIs are available for the correlation and variance terms of MSE
+mse_corr = PairwiseMetric(mse_corr_func)
+mse_var = PairwiseMetric(mse_var_func)
+nash_sutcliffe = PairwiseMetric(nash_sutcliffe_func)
+index_of_agreement = PairwiseMetric(index_of_agreement_func)
 
-
-def mse(x, y, ddof=0):
-    """
-    Mean square error (MSE) as a decomposition of the RMSD into individual
-    error components. The MSE is the second moment (about the origin) of the
-    error, and thus incorporates both the variance of the estimator and
-    its bias. For an unbiased estimator, the MSE is the variance of the
-    estimator. Like the variance, MSE has the same units of measurement as
-    the square of the quantity being estimated.
-    The delta degree of freedom keyword (ddof) can be used to correct for
-    the case the true variance is unknown and estimated from the population.
-    Concretely, the naive sample variance estimator sums the squared deviations
-    and divides by n, which is biased. Dividing instead by n - 1 yields an
-    unbiased estimator.
-
-    Parameters
-    ----------
-    x : numpy.ndarray
-        First input vector.
-    y : numpy.ndarray
-        Second input vector.
-    ddof : int, optional
-        Delta degree of freedom.The divisor used in calculations is N - ddof,
-        where N represents the number of elements. By default ddof is zero.
-    return_ci : bool, optional
-        Whether to calculate and return 95% confidence intervals. Default is
-        ``False``. The confidence intervals are calculated by assuming that `x`
-        and `y` are iid Gaussian distributed.
-
-    Returns
-    -------
-    mse : float
-        Mean square error (MSE).
-    mse_corr : float
-        Correlation component of MSE.
-    mse_bias : float
-        Bias component of the MSE.
-    mse_var : float
-        Variance component of the MSE.
-    """
-    mse_corr = 2 * np.std(x, ddof=ddof) * \
-        np.std(y, ddof=ddof) * (1 - pearsonr(x, y)[0])
-    mse_bias = bias(x, y) ** 2
-    mse_var = (np.std(x, ddof=ddof) - np.std(y, ddof=ddof)) ** 2
-    mse = mse_corr + mse_bias + mse_var
-
-    return mse, mse_corr, mse_bias, mse_var
 
 def tcol_error(x, y, z):
     """
@@ -487,224 +449,3 @@ def ecol(data, correlated=None, err_cov=None, abs_est=True):
     x = np.insert(x, 2 * len(cols), 10 * np.log10(x[0:len(cols)] / x[len(cols):2 * len(cols)]))
 
     return dict(zip(tags, x))
-
-def nash_sutcliffe(o, p):
-    """
-    Nash Sutcliffe model efficiency coefficient E. The range of E lies between
-    1.0 (perfect fit) and -inf.
-
-    Parameters
-    ----------
-    o : numpy.ndarray
-        Observations.
-    p : numpy.ndarray
-        Predictions.
-
-    Returns
-    -------
-    E : float
-        Nash Sutcliffe model efficiency coefficient E.
-    """
-    return 1 - (np.sum((o - p) ** 2)) / (np.sum((o - np.mean(o)) ** 2))
-
-
-def pearsonr(x, y):
-   """
-   Wrapper for scipy.stats.pearsonr. Calculates a Pearson correlation
-   coefficient and the p-value for testing non-correlation.
-
-   Parameters
-   ----------
-   x : numpy.ndarray
-       First input vector.
-   y : numpy.ndarray
-       Second input vector.
-
-   Returns
-   -------
-   r : float
-       Pearson's correlation coefficent.
-   p-value : float
-       2 tailed p-value.
-
-   See Also
-   --------
-   scipy.stats.pearsonr
-   """
-   return sc_stats.pearsonr(x, y)
-
-@np.errstate(invalid='ignore')
-def pearsonr_recursive(x, y, n_old=0, sum_xi_yi=0,
-                       sum_xi=0, sum_yi=0, sum_x2=0,
-                       sum_y2=0):
-    """
-    Calculate pearson correlation in a recursive manner based on
-
-    .. math:: r_{xy} = \\frac{n\\sum x_iy_i-\\sum x_i\\sum y_i} {\\sqrt{n\\sum x_i^2-(\\sum x_i)^2}~\\sqrt{n\\sum y_i^2-(\\sum y_i)^2}}
-
-    Parameters
-    ----------
-    x: numpy.ndarray
-        New values for x
-    y: numpy.ndarray
-        New values for y
-    n_old: float, optional
-        number of observations from previous pass
-    sum_xi_yi: float, optional
-        .. math:: \\sum x_iy_i
-        from previous pass
-    sum_xi: float, optional
-        .. math:: \\sum x_i
-        from previous pass
-    sum_yi: float, optional
-        .. math:: \\sum y_i
-        from previous pass
-    sum_x2: float, optional
-        .. math:: \\sum x_i^2
-        from previous pass
-    sum_y2: float, optional
-        .. math:: \\sum y_i^2
-        from previous pass
-
-    Returns
-    -------
-    r: float
-        Pearson correlation coefficient
-    params: tuple
-       tuple of (n_new, sum_xi_yi, sum_xi, sum_yi, sum_x2, sum_y2) .
-       Can be used when calling the next iteration as ``*params``.
-
-    """
-    n_new = n_old + len(x)
-    sum_xi_yi = sum_xi_yi + np.sum(np.multiply(x, y))
-    sum_xi = sum_xi + np.sum(x)
-    sum_yi = sum_yi + np.sum(y)
-    sum_x2 = sum_x2 + np.sum(x**2)
-    sum_y2 = sum_y2 + np.sum(y**2)
-
-    r = ((n_new * sum_xi_yi - sum_xi * sum_yi) /
-         (np.sqrt(n_new * sum_x2 - sum_xi**2) *
-          np.sqrt(n_new * sum_y2 - sum_yi**2)))
-
-    return r, (n_new, sum_xi_yi, sum_xi, sum_yi, sum_x2, sum_y2)
-
-
-def pearson_conf(r, n, c=95):
-    """
-    Calcalates the confidence interval of a given pearson
-    correlation coefficient using a fisher z-transform,
-    only valid for correlation coefficients calculated from
-    a bivariate normal distribution
-
-    Parameters
-    ----------
-    r : float or numpy.ndarray
-        Correlation coefficient
-    n : int or numpy.ndarray
-        Number of observations used in determining the correlation coefficient
-    c : float
-        Level of confidence in percent, from 0-100.
-
-    Returns
-    -------
-    r_lower : float or numpy.ndarray
-        Lower confidence boundary.
-    r_upper : float or numpy.ndarray
-        Upper confidence boundary.
-    """
-    # fisher z transform using the arctanh
-    z = np.arctanh(r)
-    # calculate the standard error
-    std_err = 1 / np.sqrt(n - 3)
-    # calculate the quantile of the normal distribution
-    # for the given confidence level
-    n_quant = 1 - (1 - c / 100.0) / 2.0
-    norm_z_value = sc_stats.norm.ppf(n_quant)
-    # calculate upper and lower limit for normally distributed z
-    z_upper = z + std_err * norm_z_value
-    z_lower = z - std_err * norm_z_value
-    # inverse fisher transform using the tanh
-    return np.tanh(z_lower), np.tanh(z_upper)
-
-
-def spearmanr(x, y):
-    """
-    Wrapper for scipy.stats.spearmanr. Calculates a Spearman
-    rank-order correlation coefficient and the p-value to
-    test for non-correlation.
-
-    Parameters
-    ----------
-    x : numpy.array
-        First input vector.
-    y : numpy.array
-        Second input vector.
-
-    Returns
-    -------
-    rho : float
-        Spearman correlation coefficient
-    p-value : float
-        The two-sided p-value for a hypothesis test whose null hypothesis
-        is that two sets of data are uncorrelated
-
-    See Also
-    --------
-    scipy.stats.spearmenr
-    """
-    return sc_stats.spearmanr(x, y)
-
-
-def kendalltau(x, y):
-    """
-    Wrapper for scipy.stats.kendalltau
-
-    Parameters
-    ----------
-    x : numpy.array
-        First input vector.
-    y : numpy.array
-        Second input vector.
-
-    Returns
-    -------
-    Kendall's tau : float
-        The tau statistic
-    p-value : float
-        The two-sided p-palue for a hypothesis test whose null hypothesis
-        is an absence of association, tau = 0.
-
-    See Also
-    --------
-    scipy.stats.kendalltau
-    """
-    return sc_stats.kendalltau(x, y)
-
-
-def index_of_agreement(o, p):
-    """
-    Index of agreement was proposed by Willmot (1981), to overcome the
-    insenstivity of Nash-Sutcliffe efficiency E and R^2 to differences in the
-    observed and predicted means and variances (Legates and McCabe, 1999).
-    The index of agreement represents the ratio of the mean square error and
-    the potential error (Willmot, 1984). The potential error in the denominator
-    represents the largest value that the squared difference of each pair can
-    attain. The range of d is similar to that of R^2 and lies between
-    0 (no correlation) and 1 (perfect fit).
-
-    Parameters
-    ----------
-    o : numpy.ndarray
-        Observations.
-    p : numpy.ndarray
-        Predictions.
-
-    Returns
-    -------
-    d : float
-        Index of agreement.
-    """
-    denom = np.sum((np.abs(p - np.mean(o)) + np.abs(o - np.mean(o)))**2)
-    d = 1 - RSS(o, p) / denom
-
-    return d

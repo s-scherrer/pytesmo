@@ -64,11 +64,12 @@ def bias_ci(x, y):
     Confidence interval for bias.
     """
     n = len(x)
+    bias = bias_func(x, y)
     delta = (
         np.std(x - y, ddof=1)
         / np.sqrt(n) * stats.t.ppf(1-0.025, n)
     )
-    return -delta, delta
+    return bias - delta, bias + delta
 
 
 def aad_func(x, y):
@@ -167,7 +168,7 @@ def rmsd_ci(x, y, alpha=0.05, ddof=0):
     msd = RSS(x, y) / n
     lb_msd = n * msd / stats.chi2.ppf(alpha/2, n)
     ub_msd = n * msd / stats.chi2.ppf(1 - alpha/2, n)
-    return np.sqrt(lb_msd,), np.sqrt(ub_msd)
+    return np.sqrt(lb_msd), np.sqrt(ub_msd)
 
 
 def nrmsd_func(x, y, ddof=0):
@@ -231,7 +232,332 @@ def ubrmsd_ci(x, y, alpha=0.05, ddof=0):
     """
     Confidende interval for unbiased root-mean-square deviation (uRMSD).
     """
+    n = len(x) - ddof
     ubMSD = ubrmsd_func(x, y, ddof)**2
     lb_ubMSD = n * ubMSD / stats.chi2.ppf(alpha/2, n)
     ub_ubMSD = n * ubMSD / stats.chi2.ppf(1 - alpha/2, n)
-    return np.sqrt(lb_ubMSD,), np.sqrt(ub_ubMSD)
+    return np.sqrt(lb_ubMSD), np.sqrt(ub_ubMSD)
+
+
+def mse_corr_func(x, y):
+    r"""
+    Correlation component of MSE.
+
+    MSE can be decomposed into a term describing the deviation of x and y
+    attributable to non-perfect correlation (r < 1), a term depending on the
+    difference in variances between x and y, and the difference in means
+    between x and y (bias).
+
+    ..math::
+        MSE &= MSE_{corr} + MSE_{var} + MSE_{bias}\\
+            &= 2\sigma_x\sigma_y (1-r) + (\sigma_x - \sigma_y)^2
+               + (\mu_x - \mu_y)^2
+
+    This function calculates the term :math:`MSE_{corr} =
+    2\sigma_x\sigma_y(1-r)`.
+
+    Parameters
+    ----------
+    x : numpy.ndarray
+        First input vector.
+    y : numpy.ndarray
+        Second input vector.
+
+    Returns
+    -------
+    mse_corr : float
+        Correlation component of MSE.
+    """
+    return 2 * np.std(x) * np.std(y) * (1 - pearsonr_func(x, y))
+
+
+def mse_var_func(x, y):
+    r"""
+    Variance component of MSE.
+
+    MSE can be decomposed into a term describing the deviation of x and y
+    attributable to non-perfect correlation (r < 1), a term depending on the
+    difference in variances between x and y, and the difference in means
+    between x and y (bias).
+
+    ..math::
+        MSE &= MSE_{corr} + MSE_{var} + MSE_{bias}\\
+            &= 2\sigma_x\sigma_y (1-r) + (\sigma_x - \sigma_y)^2
+               + (\mu_x - \mu_y)^2
+
+    This function calculates the term :math:`MSE_{var} = (\sigma_x -
+    \sigma_y)^2`.
+
+    Parameters
+    ----------
+    x : numpy.ndarray
+        First input vector.
+    y : numpy.ndarray
+        Second input vector.
+
+    Returns
+    -------
+    mse_var : float
+        Variance component of MSE.
+    """
+    return (np.std(x) - np.std(y)) ** 2
+
+
+def mse_bias_func(x, y):
+    r"""
+    Bias component of MSE.
+
+    MSE can be decomposed into a term describing the deviation of x and y
+    attributable to non-perfect correlation (r < 1), a term depending on the
+    difference in variances between x and y, and the difference in means
+    between x and y (bias).
+
+    ..math::
+        MSE &= MSE_{corr} + MSE_{var} + MSE_{bias}\\
+            &= 2\sigma_x\sigma_y (1-r) + (\sigma_x - \sigma_y)^2
+               + (\mu_x - \mu_y)^2
+
+    This function calculates the term :math:`MSE_{bias} = (\mu_x - \mu_y)^2`.
+
+    Parameters
+    ----------
+    x : numpy.ndarray
+        First input vector.
+    y : numpy.ndarray
+        Second input vector.
+
+    Returns
+    -------
+    mse_bias : float
+        Bias component of MSE.
+    """
+    return bias_func(x, y) ** 2
+
+
+def mse_bias_ci(x, y, alpha=0.05):
+    """
+    Confidence interval for :math:`MSE_{bias}`
+
+    See also :func:`pytesmo._metric_funcs.mse_bias_func`.
+    """
+    # we can get this by calculating the CI for
+    lb_delta, ub_delta = bias_ci(x, y, alpha)
+    return lb_delta ** 2, ub_delta ** 2
+
+
+def mse_func(x, y):
+    r"""
+    Mean squared error.
+
+    For validation, MSE is defined as
+
+    ..math::
+        MSE = \frac{1}{n}\sum\limits_{i=1}^n (x_i - y_i)^2
+
+    MSE can be decomposed into a term describing the deviation of x and y
+    attributable to non-perfect correlation (r < 1), a term depending on the
+    difference in variances between x and y, and the difference in means
+    between x and y (bias).
+
+    ..math::
+        MSE &= MSE_{corr} + MSE_{var} + MSE_{bias}\\
+            &= 2\sigma_x\sigma_y (1-r) + (\sigma_x - \sigma_y)^2
+               + (\mu_x - \mu_y)^2
+
+    This function calculates the full MSE, the function `mse_corr`, `mse_var`,
+    and `mse_bias` can be used to calculate the individual components.
+    """
+    return np.mean((x - y)**2)
+
+
+def mse_ci(x, y, alpha=0.05):
+    """
+    Confidence interval for MSE.
+    """
+    n = len(x)
+    mse = mse_func(x, y)
+    lb_mse = n * mse / stats.chi2.ppf(alpha/2, n)
+    ub_mse = n * mse / stats.chi2.ppf(1 - alpha/2, n)
+    return np.sqrt(lb_mse), np.sqrt(ub_mse)
+
+
+def pearsonr_func(x, y):
+    """
+    Wrapper for scipy.stats.pearsonr.
+
+    Calculates a Pearson correlation coefficient and the p-value for testing
+    non-correlation.
+
+    Parameters
+    ----------
+    x : numpy.ndarray
+        First input vector.
+    y : numpy.ndarray
+        Second input vector.
+
+    Returns
+    -------
+    r : float
+        Pearson's correlation coefficent.
+
+    See Also
+    --------
+    scipy.stats.pearsonr
+    """
+    return stats.pearsonr(x, y)[0]
+
+
+def pearsonr_ci(x, y, alpha=0.05):
+    """
+    Confidence interval for Pearson correlation coefficient.
+
+    References
+    ----------
+    Bonett, D. G., & Wright, T. A. (2000). Sample size requirements for
+    estimating Pearson, Kendall and Spearman correlations. Psychometrika,
+    65(1), 23-28.
+    """
+    n = len(x)
+    r = pearsonr_func(x, y)
+    v = np.arctanh(r)
+    z = stats.norm.ppf(alpha/2)
+    cl = v - z/np.sqrt(n - 3)
+    cu = v + z/np.sqrt(n - 3)
+    return np.tanh(cl), np.tanh(cu)
+
+
+def spearmanr_func(x, y):
+    """
+    Wrapper for scipy.stats.spearmanr. Calculates a Spearman
+    rank-order correlation coefficient and the p-value to
+    test for non-correlation.
+
+    Parameters
+    ----------
+    x : numpy.array
+        First input vector.
+    y : numpy.array
+        Second input vector.
+
+    Returns
+    -------
+    rho : float
+        Spearman correlation coefficient
+
+    See Also
+    --------
+    scipy.stats.spearmenr
+    """
+    return stats.spearmanr(x, y)[0]
+
+
+def spearmanr_ci(x, y, alpha=0.05):
+    """
+    Confidence interval for Spearman rank correlation coefficient.
+
+    References
+    ----------
+    Bonett, D. G., & Wright, T. A. (2000). Sample size requirements for
+    estimating Pearson, Kendall and Spearman correlations. Psychometrika,
+    65(1), 23-28.
+    """
+    n = len(x)
+    r = spearmanr_func(x, y)
+    v = np.arctanh(r)
+    z = stats.norm.ppf(alpha/2)
+    # see reference for this formula
+    cl = v - z * np.sqrt(1 + r ** 2 / 2) / np.sqrt(n - 3)
+    cu = v - z * np.sqrt(1 + r ** 2 / 2) / np.sqrt(n - 3)
+    return np.tanh(cl), np.tanh(cu)
+
+
+def kendalltau_func(x, y):
+    """
+    Wrapper for scipy.stats.kendalltau
+
+    Parameters
+    ----------
+    x : numpy.array
+        First input vector.
+    y : numpy.array
+        Second input vector.
+
+    Returns
+    -------
+    Kendall's tau : float
+        The tau statistic
+
+    See Also
+    --------
+    scipy.stats.kendalltau
+    """
+    return stats.kendalltau(x, y)[0]
+
+
+def kendalltau_ci(x, y, alpha=0.05):
+    r"""
+    Confidence intervall for Kendall's rank coefficient.
+
+    References
+    ----------
+    Bonett, D. G., & Wright, T. A. (2000). Sample size requirements for
+    estimating Pearson, Kendall and Spearman correlations. Psychometrika,
+    65(1), 23-28.
+    """
+    n = len(x)
+    r = kendalltau_func(x, y)
+    v = np.arctanh(r)
+    z = stats.norm.ppf(alpha/2)
+    # see reference for this formula
+    cl = v - z * 0.431 / np.sqrt(n - 3)
+    cu = v + z * 0.431 / np.sqrt(n - 3)
+    return np.tanh(cl), np.tanh(cu)
+
+
+def index_of_agreement_func(o, p):
+    """
+    Index of agreement was proposed by Willmot (1981), to overcome the
+    insenstivity of Nash-Sutcliffe efficiency E and R^2 to differences in the
+    observed and predicted means and variances (Legates and McCabe, 1999).
+    The index of agreement represents the ratio of the mean square error and
+    the potential error (Willmot, 1984). The potential error in the denominator
+    represents the largest value that the squared difference of each pair can
+    attain. The range of d is similar to that of R^2 and lies between
+    0 (no correlation) and 1 (perfect fit).
+
+    Parameters
+    ----------
+    o : numpy.ndarray
+        Observations.
+    p : numpy.ndarray
+        Predictions.
+
+    Returns
+    -------
+    d : float
+        Index of agreement.
+    """
+    denom = np.sum((np.abs(p - np.mean(o)) + np.abs(o - np.mean(o)))**2)
+    d = 1 - RSS(o, p) / denom
+
+    return d
+
+
+def nash_sutcliffe_func(o, p):
+    """
+    Nash Sutcliffe model efficiency coefficient E. The range of E lies between
+    1.0 (perfect fit) and -inf.
+
+    Parameters
+    ----------
+    o : numpy.ndarray
+        Observations.
+    p : numpy.ndarray
+        Predictions.
+
+    Returns
+    -------
+    E : float
+        Nash Sutcliffe model efficiency coefficient E.
+    """
+    return 1 - (np.sum((o - p) ** 2)) / (np.sum((o - np.mean(o)) ** 2))
