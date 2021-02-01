@@ -33,7 +33,6 @@ Formulas for analytical CIs are taken from Gilleland 2010, 10.5065/D6WD3XJM
 https://opensky.ucar.edu/islandora/object/technotes:491
 """
 
-from itertools import permutations, combinations
 import numpy as np
 from scipy import stats
 
@@ -249,6 +248,7 @@ def mse_corr_func(x, y):
     between x and y (bias).
 
     ..math::
+
         MSE &= MSE_{corr} + MSE_{var} + MSE_{bias}\\
             &= 2\sigma_x\sigma_y (1-r) + (\sigma_x - \sigma_y)^2
                + (\mu_x - \mu_y)^2
@@ -268,7 +268,7 @@ def mse_corr_func(x, y):
     mse_corr : float
         Correlation component of MSE.
     """
-    return 2 * np.std(x) * np.std(y) * (1 - pearsonr_func(x, y))
+    return 2 * np.std(x) * np.std(y) * (1 - pearson_r_func(x, y))
 
 
 def mse_var_func(x, y):
@@ -281,6 +281,7 @@ def mse_var_func(x, y):
     between x and y (bias).
 
     ..math::
+
         MSE &= MSE_{corr} + MSE_{var} + MSE_{bias}\\
             &= 2\sigma_x\sigma_y (1-r) + (\sigma_x - \sigma_y)^2
                + (\mu_x - \mu_y)^2
@@ -313,6 +314,7 @@ def mse_bias_func(x, y):
     between x and y (bias).
 
     ..math::
+
         MSE &= MSE_{corr} + MSE_{var} + MSE_{bias}\\
             &= 2\sigma_x\sigma_y (1-r) + (\sigma_x - \sigma_y)^2
                + (\mu_x - \mu_y)^2
@@ -352,6 +354,7 @@ def mse_func(x, y):
     For validation, MSE is defined as
 
     ..math::
+
         MSE = \frac{1}{n}\sum\limits_{i=1}^n (x_i - y_i)^2
 
     MSE can be decomposed into a term describing the deviation of x and y
@@ -360,6 +363,7 @@ def mse_func(x, y):
     between x and y (bias).
 
     ..math::
+
         MSE &= MSE_{corr} + MSE_{var} + MSE_{bias}\\
             &= 2\sigma_x\sigma_y (1-r) + (\sigma_x - \sigma_y)^2
                + (\mu_x - \mu_y)^2
@@ -381,7 +385,7 @@ def mse_ci(x, y, alpha=0.05):
     return np.sqrt(lb_mse), np.sqrt(ub_mse)
 
 
-def pearsonr_func(x, y):
+def pearson_r_func(x, y):
     """
     Wrapper for scipy.stats.pearsonr.
 
@@ -407,7 +411,7 @@ def pearsonr_func(x, y):
     return stats.pearsonr(x, y)[0]
 
 
-def pearsonr_ci(x, y, alpha=0.05):
+def pearson_r_ci(x, y, alpha=0.05):
     """
     Confidence interval for Pearson correlation coefficient.
 
@@ -418,7 +422,7 @@ def pearsonr_ci(x, y, alpha=0.05):
     65(1), 23-28.
     """
     n = len(x)
-    r = pearsonr_func(x, y)
+    r = pearson_r_func(x, y)
     v = np.arctanh(r)
     z = stats.norm.ppf(alpha/2)
     cl = v - z/np.sqrt(n - 3)
@@ -426,7 +430,7 @@ def pearsonr_ci(x, y, alpha=0.05):
     return np.tanh(cl), np.tanh(cu)
 
 
-def spearmanr_func(x, y):
+def spearman_r_func(x, y):
     """
     Wrapper for scipy.stats.spearmanr. Calculates a Spearman
     rank-order correlation coefficient and the p-value to
@@ -451,7 +455,7 @@ def spearmanr_func(x, y):
     return stats.spearmanr(x, y)[0]
 
 
-def spearmanr_ci(x, y, alpha=0.05):
+def spearman_r_ci(x, y, alpha=0.05):
     """
     Confidence interval for Spearman rank correlation coefficient.
 
@@ -462,7 +466,7 @@ def spearmanr_ci(x, y, alpha=0.05):
     65(1), 23-28.
     """
     n = len(x)
-    r = spearmanr_func(x, y)
+    r = spearman_r_func(x, y)
     v = np.arctanh(r)
     z = stats.norm.ppf(alpha/2)
     # see reference for this formula
@@ -471,7 +475,7 @@ def spearmanr_ci(x, y, alpha=0.05):
     return np.tanh(cl), np.tanh(cu)
 
 
-def kendalltau_func(x, y):
+def kendall_tau_func(x, y):
     """
     Wrapper for scipy.stats.kendalltau
 
@@ -494,7 +498,7 @@ def kendalltau_func(x, y):
     return stats.kendalltau(x, y)[0]
 
 
-def kendalltau_ci(x, y, alpha=0.05):
+def kendall_tau_ci(x, y, alpha=0.05):
     r"""
     Confidence intervall for Kendall's rank coefficient.
 
@@ -505,7 +509,7 @@ def kendalltau_ci(x, y, alpha=0.05):
     65(1), 23-28.
     """
     n = len(x)
-    r = kendalltau_func(x, y)
+    r = kendall_tau_func(x, y)
     v = np.arctanh(r)
     z = stats.norm.ppf(alpha/2)
     # see reference for this formula
