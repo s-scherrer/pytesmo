@@ -511,8 +511,8 @@ def test_RollingMetrics():
     indexer = np.arange(30)[None, :] + np.arange(len(df)-30)[:, None]
     rmsd_arr = []
     for i in range(indexer.shape[0]):
-        rmsd_arr.append(metrics.rmsd(df['ref'][indexer[i, :]],
-                                     df['k1'][indexer[i, :]]))
+        rmsd_arr.append(metrics.rmsd(df['ref'][indexer[i, :]].values,
+                                     df['k1'][indexer[i, :]].values))
 
     rmsd_arr = np.array(rmsd_arr)
     np.testing.assert_almost_equal(dataset['RMSD'][0][29:-1], rmsd_arr)
