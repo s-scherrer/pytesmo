@@ -80,7 +80,7 @@ def test_self_masking_adapter():
     nptest.assert_almost_equal(data_masked2['y'].values,ref_y)
 
 def my_bitmasking(a,b):
-    return a & b == b
+    return a.astype(int) & b == b
 
 def test_advanced_masking_adapter():
     ref_x = np.arange(5,15,2)
