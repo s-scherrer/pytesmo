@@ -55,10 +55,10 @@ from ismn.interface import ISMN_Interface
 from pytesmo.validation_framework.validation import Validation
 from pytesmo.validation_framework.validation import args_to_iterable
 
-from tests.test_validation_framwork.test_datasets import setup_TestDatasets
-from tests.test_validation_framwork.test_datasets import setup_two_without_overlap
-from tests.test_validation_framwork.test_datasets import setup_three_with_two_overlapping
-from tests.test_validation_framwork.test_datasets import MaskingTestDataset
+from tests.test_validation_framework.test_datasets import setup_TestDatasets
+from tests.test_validation_framework.test_datasets import setup_two_without_overlap
+from tests.test_validation_framework.test_datasets import setup_three_with_two_overlapping
+from tests.test_validation_framework.test_datasets import MaskingTestDataset
 
 import warnings
 

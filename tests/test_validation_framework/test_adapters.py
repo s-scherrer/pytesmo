@@ -37,7 +37,7 @@ from pytesmo.validation_framework.adapters import MaskingAdapter,\
 from pytesmo.validation_framework.adapters import SelfMaskingAdapter
 from pytesmo.validation_framework.adapters import AnomalyAdapter
 from pytesmo.validation_framework.adapters import AnomalyClimAdapter
-from tests.test_validation_framwork.test_datasets import TestDataset
+from tests.test_validation_framework.test_datasets import TestDataset
 from ascat.read_native.cdr import AscatSsmCdr
 
 import numpy as np
