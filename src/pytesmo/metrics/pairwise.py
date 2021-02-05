@@ -39,28 +39,7 @@ import numpy as np
 from scipy import stats
 import warnings
 
-from pytesmo.utils import deprecated
-
-
-def bias(x, y):
-    """
-    Difference of the mean values.
-
-    Sign of output depends on argument order. We calculate mean(x) - mean(y).
-
-    Parameters
-    ----------
-    x : numpy.ndarray
-        First input vector.
-    y : numpy.ndarray
-        Second input vector.
-
-    Returns
-    -------
-    bias : float
-        Bias between x and y.
-    """
-    return np.mean(x) - np.mean(y)
+from pytesmo.metrics._fast import RSS
 
 
 def bias_ci(x, y, b, alpha=0.05):
@@ -141,19 +120,19 @@ def msd(x, y):
 
         MSD = \frac{1}{n}\sum\limits_{i=1}^n (x_i - y_i)^2
 
-    MSE can be decomposed into a term describing the deviation of x and y
+    MSD can be decomposed into a term describing the deviation of x and y
     attributable to non-perfect correlation (r < 1), a term depending on the
     difference in variances between x and y, and the difference in means
     between x and y (bias).
 
     ..math::
 
-        MSE &= MSE_{corr} + MSE_{var} + MSE_{bias}\\
+        MSD &= MSD_{corr} + MSD_{var} + MSD_{bias}\\
             &= 2\sigma_x\sigma_y (1-r) + (\sigma_x - \sigma_y)^2
                + (\mu_x - \mu_y)^2
 
-    This function calculates the full MSE, the function `mse_corr`, `mse_var`,
-    and `mse_bias` can be used to calculate the individual components.
+    This function calculates the full MSD, the function `msd_corr`, `msd_var`,
+    and `msd_bias` can be used to calculate the individual components.
 
     Parameters
     ----------
@@ -167,7 +146,7 @@ def msd(x, y):
     msd : float
         Mean square deviation
     """
-    return np.mean((x - y)**2)
+    return RSS(x, y) / len(x)
 
 
 def msd_ci(x, y, m, alpha=0.05):
@@ -350,8 +329,7 @@ def ubrmsd(x, y, ddof=0):
             "ddof is deprecated and might be removed in future versions of"
             " pytesmo."
         )
-    return np.sqrt(np.sum(((x - np.mean(x)) -
-                           (y - np.mean(y))) ** 2) / (len(x) - ddof))
+    return np.sqrt(RSS(x - np.mean(x), y - np.mean(y)) / (len(x) - ddof))
 
 
 def ubrmsd_ci(x, y, ubrmsd, alpha=0.05):
@@ -381,109 +359,11 @@ def ubrmsd_ci(x, y, ubrmsd, alpha=0.05):
     return np.sqrt(lb_ubMSD), np.sqrt(ub_ubMSD)
 
 
-def msd_corr(x, y):
-    r"""
-    Correlation component of MSD.
-
-    MSD can be decomposed into a term describing the deviation of x and y
-    attributable to non-perfect correlation (r < 1), a term depending on the
-    difference in variances between x and y, and the difference in means
-    between x and y (bias).
-
-    ..math::
-
-        MSD &= MSD_{corr} + MSD_{var} + MSD_{bias}\\
-            &= 2\sigma_x\sigma_y (1-r) + (\sigma_x - \sigma_y)^2
-               + (\mu_x - \mu_y)^2
-
-    This function calculates the term :math:`MSE_{corr} =
-    2\sigma_x\sigma_y(1-r)`.
-
-    Parameters
-    ----------
-    x : numpy.ndarray
-        First input vector.
-    y : numpy.ndarray
-        Second input vector.
-
-    Returns
-    -------
-    msd_corr : float
-        Correlation component of MSE.
-    """
-    return 2 * np.std(x) * np.std(y) * (1 - pearson_r(x, y))
-
-
-def msd_var(x, y):
-    r"""
-    Variance component of MSD.
-
-    MSD can be decomposed into a term describing the deviation of x and y
-    attributable to non-perfect correlation (r < 1), a term depending on the
-    difference in variances between x and y, and the difference in means
-    between x and y (bias).
-
-    ..math::
-
-        MSD &= MSD_{corr} + MSD_{var} + MSD_{bias}\\
-            &= 2\sigma_x\sigma_y (1-r) + (\sigma_x - \sigma_y)^2
-               + (\mu_x - \mu_y)^2
-
-    This function calculates the term :math:`MSD_{var} = (\sigma_x -
-    \sigma_y)^2`.
-
-    Parameters
-    ----------
-    x : numpy.ndarray
-        First input vector.
-    y : numpy.ndarray
-        Second input vector.
-
-    Returns
-    -------
-    msd_var : float
-        Variance component of MSD.
-    """
-    return (np.std(x) - np.std(y)) ** 2
-
-
-def msd_bias(x, y):
-    r"""
-    Bias component of MSD.
-
-    MSD can be decomposed into a term describing the deviation of x and y
-    attributable to non-perfect correlation (r < 1), a term depending on the
-    difference in variances between x and y, and the difference in means
-    between x and y (bias).
-
-    ..math::
-
-        MSD &= MSD_{corr} + MSD_{var} + MSD_{bias}\\
-            &= 2\sigma_x\sigma_y (1-r) + (\sigma_x - \sigma_y)^2
-               + (\mu_x - \mu_y)^2
-
-    This function calculates the term :math:`MSD_{bias} = (\mu_x - \mu_y)^2`.
-
-    Parameters
-    ----------
-    x : numpy.ndarray
-        First input vector.
-    y : numpy.ndarray
-        Second input vector.
-
-    Returns
-    -------
-    msd_bias : float
-        Bias component of MSD.
-    """
-    return bias(x, y) ** 2
-
-
 def msd_bias_ci(x, y, msd_bias, alpha=0.05):
     """
-    Confidence interval for :math:`MSE_{bias}`
+    Confidence interval for :math:`MSD_{bias}`
 
-    See also :func:`pytesmo._metric_funcs.mse_bias_func`.
+    See also :func:`pytesmo.metrics.msd_bias`.
 
     Parameters
     ----------
@@ -704,7 +584,6 @@ def index_of_agreement(o, p):
     """
     denom = np.sum((np.abs(p - np.mean(o)) + np.abs(o - np.mean(o)))**2)
     d = 1 - RSS(o, p) / denom
-
     return d
 
 
@@ -726,23 +605,3 @@ def nash_sutcliffe(o, p):
         Nash Sutcliffe model efficiency coefficient E.
     """
     return 1 - (np.sum((o - p) ** 2)) / (np.sum((o - np.mean(o)) ** 2))
-
-
-@deprecated
-def RSS(o, p):
-    """
-    Residual sum of squares.
-
-    Parameters
-    ----------
-    o : numpy.ndarray
-        Observations.
-    p : numpy.ndarray
-        Predictions.
-
-    Returns
-    -------
-    res : float
-        Residual sum of squares.
-    """
-    return np.sum((o - p) ** 2)

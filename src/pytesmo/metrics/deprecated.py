@@ -10,26 +10,6 @@ from pytesmo.metrics.pairwise import bias
 
 
 @deprecated
-def RSS(o, p):
-    """
-    Residual sum of squares.
-
-    Parameters
-    ----------
-    o : numpy.ndarray
-        Observations.
-    p : numpy.ndarray
-        Predictions.
-
-    Returns
-    -------
-    res : float
-        Residual sum of squares.
-    """
-    return np.sum((o - p) ** 2)
-
-
-@deprecated
 def tcol_error(x, y, z):
     """
     DEPRECATED: Use ``pytesmo.metrics.tcol_metrics`` instead.
@@ -214,7 +194,9 @@ def tcol_snr(x, y, z, ref_ind=0):
 @deprecated
 def mse(x, y, ddof=0):
     """
-    DEPRECATED: use `msd`, `msd_corr`, `msd_bias`, or `msd_var` instead.
+    DEPRECATED: use `msd`, `msd_corr`, `msd_bias`, or `msd_var` for the
+    individual components or `pytesmo.metrics.msd_decomposition` for the full
+    decomposition instead.
 
     Mean square error (MSE) as a decomposition of the RMSD into individual
     error components. The MSE is the second moment (about the origin) of the

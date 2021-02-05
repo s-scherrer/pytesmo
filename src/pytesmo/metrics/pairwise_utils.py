@@ -80,10 +80,8 @@ def with_bootstrapped_ci(metric_func, x, y, alpha=0.05,
     Parameters
     ----------
     metric_func : callable
-        Function that calculates metric value. Must be from
-        :py:mod:`pytesmo.metrics`, and have an analytical CI function
-        implemented in :py:mod:`pytesmo.metric_cis`.
-        The metric function must have the following signature:
+        Function that calculates metric value.  The metric function must have
+        the following signature:
         ``(x : np.ndarray, y : np.ndarray) -> float``
     x, y : np.ndarray
         Data to be compared.

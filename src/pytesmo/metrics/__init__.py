@@ -77,11 +77,13 @@ from pytesmo.metrics.pairwise import (
     msd_bias,
     msd_var,
     msd_corr,
+    msd_decomposition,
     pearson_r,
     spearman_r,
     kendall_tau,
     nash_sutcliffe,
-    index_of_agreement
+    index_of_agreement,
+    RSS,
 )
 from pytesmo.metrics.pairwise_utils import (
     has_analytical_ci,
