@@ -19,6 +19,13 @@ def testdata():
     return x, y
 
 
+@pytest.fixture
+def arange_testdata():
+    x = np.arange(10) * 1.0
+    y = np.arange(10) + 2.0
+    return x, y
+
+
 has_ci = [
     "bias",
     "msd",
@@ -64,6 +71,7 @@ def test_analytical_cis(testdata):
         assert ub > ub10
 
 
+@pytest.mark.slow
 def test_bootstrapped_cis(testdata):
     x, y = testdata
     for funcname in has_ci:
@@ -158,13 +166,12 @@ def test_tcol_metrics():
     )
 
 
-def test_bias():
+def test_bias(arange_testdata):
     """
     Test for bias
     """
     # example 1
-    x = np.arange(10)
-    y = np.arange(10) + 2
+    x, y = arange_testdata
 
     b_pred = -2
     b_obs = bias(x, y)
@@ -172,8 +179,8 @@ def test_bias():
     nptest.assert_equal(b_obs, b_pred)
 
     # example 2
-    x = np.arange(10)
-    y = np.arange(20, 30)
+    x = np.arange(10) * 1.0
+    y = np.arange(20, 30) * 1.0
 
     b_pred = 20.
     b_obs = bias(y, x)
@@ -181,21 +188,18 @@ def test_bias():
     nptest.assert_equal(b_obs, b_pred)
 
 
-def test_aad():
+def test_aad(arange_testdata):
     """
     Test for average absolute deviation
     """
     # example 1
-    x = np.arange(10)
-    y = np.arange(10) + 2
+    x, y = arange_testdata
     dev_pred = 2.
     dev_obs = aad(x, y)
 
     nptest.assert_equal(dev_obs, dev_pred)
 
     # example 2, with outlier
-    x = np.arange(10)
-    y = np.arange(10) + 2
     y[-1] = 201.
     dev_pred = 21.
     dev_obs = aad(x, y)
@@ -203,21 +207,18 @@ def test_aad():
     nptest.assert_equal(dev_obs, dev_pred)
 
 
-def test_mad():
+def test_mad(arange_testdata):
     """
     Test for median absolute deviation
     """
     # example 1
-    x = np.arange(10)
-    y = np.arange(10) + 2
+    x, y = arange_testdata
     dev_pred = 2.
     dev_obs = mad(x, y)
 
     nptest.assert_equal(dev_obs, dev_pred)
 
     # example 2, with outlier
-    x = np.arange(10)
-    y = np.arange(10) + 2
     y[-1] = 201.
     dev_pred = 2.
     dev_obs = mad(x, y)
@@ -225,13 +226,12 @@ def test_mad():
     nptest.assert_equal(dev_obs, dev_pred)
 
 
-def test_rmsd():
+def test_rmsd(arange_testdata):
     """
     Test for rmsd
     """
     # example 1
-    x = np.arange(10)
-    y = np.arange(10) + 2
+    x, y = arange_testdata
 
     rmsd_pred = 2.
     rmsd_obs = rmsd(x, y)
@@ -239,8 +239,6 @@ def test_rmsd():
     nptest.assert_equal(rmsd_obs, rmsd_pred)
 
     # example 2, with outlier
-    x = np.arange(10)
-    y = np.arange(10) + 2
     y[-1] = 100.
 
     rmsd_pred = np.sqrt(831.7)
@@ -249,13 +247,12 @@ def test_rmsd():
     nptest.assert_almost_equal(rmsd_obs, rmsd_pred, 6)
 
 
-def test_ubrmsd():
+def test_ubrmsd(arange_testdata):
     """
     Test for ubrmsd
     """
     # example 1
-    x = np.arange(10)
-    y = np.arange(10) + 2
+    x, y = arange_testdata
 
     ubrmsd_pred = 0
     ubrmsd_obs = ubrmsd(x, y)
@@ -266,8 +263,6 @@ def test_ubrmsd():
     nptest.assert_equal(ubrmsd_obs, ubrmsd_direct)
 
     # example 2, with outlier
-    x = np.arange(10)
-    y = np.arange(10) + 2
     y[-1] = 100.
 
     ubrmsd_pred = 26.7
@@ -279,13 +274,12 @@ def test_ubrmsd():
     nptest.assert_almost_equal(ubrmsd_obs, ubrmsd_direct)
 
 
-def test_msd():
+def test_msd(arange_testdata):
     """
     Test for msd
     """
     # example 1
-    x = np.arange(10)
-    y = np.arange(10) + 2
+    x, y = arange_testdata
 
     msd_pred = 4.
     msd_bias_pred = 2. ** 2
@@ -296,8 +290,6 @@ def test_msd():
     nptest.assert_equal(msd_bias_obs, msd_bias_pred)
 
     # example 2, with outlier
-    x = np.arange(10)
-    y = np.arange(10) + 2
     y[-1] = 51.
 
     msd_pred = 180.

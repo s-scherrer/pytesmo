@@ -1,12 +1,16 @@
+import numpy as np
 cimport numpy as np
 cimport cython
 from libc.math cimport sqrt
 
+ctypedef fused numeric:
+    np.float32_t
+    np.float64_t
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
-cpdef bias(np.float_t [:] x, np.float_t [:] y):
+cpdef bias(numeric [:] x, numeric [:] y):
     """
     Difference of the mean values.
 
@@ -24,7 +28,7 @@ cpdef bias(np.float_t [:] x, np.float_t [:] y):
     bias : float
         Bias between x and y.
     """
-    cdef np.float_t b = 0
+    cdef numeric b = 0
     cdef int i, n = len(x)
     for i in range(n):
         b += x[i] - y[i]
@@ -32,7 +36,7 @@ cpdef bias(np.float_t [:] x, np.float_t [:] y):
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cpdef RSS(np.float_t [:] x, np.float_t [:] y):
+cpdef RSS(numeric [:] x, numeric [:] y):
     """
     Residual sum of squares.
 
@@ -48,7 +52,7 @@ cpdef RSS(np.float_t [:] x, np.float_t [:] y):
     res : float
         Residual sum of squares.
     """
-    cdef np.float_t sum = 0
+    cdef numeric sum = 0
     cdef int i
     cdef int n = len(x)
     for i in range(n):
@@ -59,7 +63,7 @@ cpdef RSS(np.float_t [:] x, np.float_t [:] y):
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
-cpdef msd_corr(np.float_t [:] x, np.float_t [:] y):
+cpdef msd_corr(numeric [:] x, numeric [:] y):
     r"""
     Correlation component of MSD.
 
@@ -89,8 +93,8 @@ cpdef msd_corr(np.float_t [:] x, np.float_t [:] y):
     msd_corr : float
         Correlation component of MSE.
     """
-    cdef np.float_t mx = 0, my = 0
-    cdef np.float_t varx = 0, vary = 0, cov = 0
+    cdef numeric mx = 0, my = 0
+    cdef numeric varx = 0, vary = 0, cov = 0
     cdef int i, n = len(x)
     
     # calculate means
@@ -114,7 +118,7 @@ cpdef msd_corr(np.float_t [:] x, np.float_t [:] y):
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
-cpdef msd_var(np.float_t [:] x, np.float_t [:] y):
+cpdef msd_var(numeric [:] x, numeric [:] y):
     r"""
     Variance component of MSD.
 
@@ -144,8 +148,8 @@ cpdef msd_var(np.float_t [:] x, np.float_t [:] y):
     msd_var : float
         Variance component of MSD.
     """
-    cdef np.float_t mx = 0, my = 0
-    cdef np.float_t varx = 0, vary = 0, cov = 0
+    cdef numeric mx = 0, my = 0
+    cdef numeric varx = 0, vary = 0, cov = 0
     cdef int i, n = len(x)
     
     # calculate means
@@ -167,7 +171,7 @@ cpdef msd_var(np.float_t [:] x, np.float_t [:] y):
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
-cpdef msd_bias(np.float_t [:] x, np.float_t [:] y):
+cpdef msd_bias(numeric [:] x, numeric [:] y):
     r"""
     Bias component of MSD.
 
@@ -199,10 +203,16 @@ cpdef msd_bias(np.float_t [:] x, np.float_t [:] y):
     return bias(x, y) ** 2
 
 
+# Faster implementation of the old `mse`
+# mse:
+# 1.52 ms ± 138 µs per loop (mean ± std. dev. of 7 runs, 1000 loops each)
+# msd_decomposition:
+# 48.3 µs ± 8.69 µs per loop (mean ± std. dev. of 7 runs, 10000 loops each)
+# -> 32 times faster!
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
-cpdef msd_decomposition(np.float_t [:] x, np.float_t [:] y):
+cpdef msd_decomposition(numeric [:] x, numeric [:] y):
     r"""
     Mean square deviation/mean square error.
 
@@ -243,9 +253,9 @@ cpdef msd_decomposition(np.float_t [:] x, np.float_t [:] y):
     msd_var : float
         Variance component of the MSD.
     """
-    cdef np.float_t mx = 0, my = 0
-    cdef np.float_t varx = 0, vary = 0, cov = 0
-    cdef np.float_t msd, msd_corr, msd_var, msd_bias
+    cdef numeric mx = 0, my = 0
+    cdef numeric varx = 0, vary = 0, cov = 0
+    cdef numeric msd, msd_corr, msd_var, msd_bias
     cdef int i, n = len(x)
     
     # calculate means
@@ -270,3 +280,51 @@ cpdef msd_decomposition(np.float_t [:] x, np.float_t [:] y):
     msd_bias = (mx - my) ** 2
     msd = msd_corr + msd_var + msd_bias
     return msd, msd_corr, msd_bias, msd_var
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+cpdef _ubrmsd(numeric [:] x, numeric [:] y):
+    r"""
+    Unbiased root-mean-square deviation (uRMSD).
+
+    This corresponds to RMSD with mean biases removed beforehand, that is
+
+    ..math::
+
+        ubRMSD = \sqrt{\frac{1}{n}\sum\limits_{i=1}^n
+                           \left((x - \bar{x}) - (y - \bar{y}))^2}
+
+    NOTE: If you are scaling the data beforehand to have zero mean bias, this
+    is exactly the same as RMSD.
+
+    Parameters
+    ----------
+    x : numpy.ndarray
+        First input vector.
+    y : numpy.ndarray
+        Second input vector.
+
+    Returns
+    -------
+    ubrmsd : float
+        Unbiased root-mean-square deviation (uRMSD).
+    """
+    cdef numeric mx = 0, my = 0
+    cdef numeric sum = 0
+    cdef int i, n = len(x)
+
+    if n == 0:
+        return float("nan")
+    
+    # calculate means
+    for i in range(n):
+        mx += x[i]
+        my += y[i]
+    mx /= n
+    my /= n
+
+    # get unbiased values
+    for i in range(n):
+        sum += ((x[i] - mx) - (y[i] - my))**2
+    return sqrt(sum / n)

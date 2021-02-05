@@ -39,7 +39,7 @@ import numpy as np
 from scipy import stats
 import warnings
 
-from pytesmo.metrics._fast import RSS
+from pytesmo.metrics._fast import RSS, _ubrmsd
 
 
 def bias_ci(x, y, b, alpha=0.05):
@@ -325,11 +325,14 @@ def ubrmsd(x, y, ddof=0):
         Unbiased root-mean-square deviation (uRMSD).
     """
     if ddof != 0:
-        raise DeprecationWarning(
+        warnings.warn(
             "ddof is deprecated and might be removed in future versions of"
-            " pytesmo."
+            " pytesmo.",
+            DeprecationWarning
         )
-    return np.sqrt(RSS(x - np.mean(x), y - np.mean(y)) / (len(x) - ddof))
+        return np.sqrt(RSS(x - np.mean(x), y - np.mean(y)) / (len(x) - ddof))
+    else:
+        return _ubrmsd(x, y)
 
 
 def ubrmsd_ci(x, y, ubrmsd, alpha=0.05):

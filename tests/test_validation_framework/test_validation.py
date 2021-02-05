@@ -62,6 +62,8 @@ from tests.test_validation_framwork.test_datasets import MaskingTestDataset
 
 import warnings
 
+
+@pytest.mark.slow
 @pytest.mark.full_framework
 def test_ascat_ismn_validation():
     """
@@ -165,6 +167,8 @@ def test_ascat_ismn_validation():
                                sorted(results.variables['RMSD'][:]),
                                rtol=1e-4)
 
+
+@pytest.mark.slow
 @pytest.mark.full_framework
 def test_ascat_ismn_validation_metadata():
     """
@@ -713,6 +717,8 @@ def test_validation_n3_k2_masking():
             nptest.assert_almost_equal(results[key]['n_obs'],
                                        tst[tst_key]['n_obs'])
 
+
+@pytest.mark.slow
 @pytest.mark.full_framework
 def test_ascat_ismn_validation_metadata_rolling():
     """

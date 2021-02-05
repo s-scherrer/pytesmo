@@ -33,17 +33,16 @@ import pytesmo.metrics as met
 from pytesmo.metrics import *
 import pytest
 
+from .test_metrics import arange_testdata
+
 
 def test_deprecation_warnings():
     x = np.random.randn(100)
     y = np.random.randn(100)
     z = np.random.randn(100)
-    
-    with pytest.deprecated_call():
-        rmsd(x, y, ddof=1)
 
     with pytest.deprecated_call():
-        RSS(x, y)
+        rmsd(x, y, ddof=1)
 
     with pytest.deprecated_call():
         tcol_error(x, y, z)
@@ -59,7 +58,7 @@ def test_deprecation_warnings():
 
     with pytest.deprecated_call():
         kendalltau(x, y)
-        
+
 
 
 def test_pearson_conf():
@@ -116,13 +115,12 @@ def test_pearson_recursive():
     nptest.assert_almost_equal(r, r_rec)
 
 
-def test_mse():
+def test_mse(arange_testdata):
     """
     Test for mse
     """
     # example 1
-    x = np.arange(10)
-    y = np.arange(10) + 2
+    x, y = arange_testdata
 
     mse_pred = 4.
     mse_bias_pred = 2. ** 2
@@ -132,8 +130,6 @@ def test_mse():
     nptest.assert_equal(mse_bias, mse_bias_pred)
 
     # example 2, with outlier
-    x = np.arange(10)
-    y = np.arange(10) + 2
     y[-1] = 51.
 
     mse_pred = 180.

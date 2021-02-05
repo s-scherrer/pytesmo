@@ -6,7 +6,7 @@ import numpy as np
 from scipy import stats
 
 from pytesmo.utils import deprecated
-from pytesmo.metrics.pairwise import bias
+from pytesmo.metrics._fast import bias
 
 
 @deprecated

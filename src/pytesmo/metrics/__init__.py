@@ -67,23 +67,25 @@ collocation metrics in :py:mod:`pytesmo.metrics.tcol`.
 
 
 from pytesmo.metrics.pairwise import (
-    bias,
     aad,
     mad,
     msd,
     rmsd,
     nrmsd,
     ubrmsd,
-    msd_bias,
-    msd_var,
-    msd_corr,
-    msd_decomposition,
     pearson_r,
     spearman_r,
     kendall_tau,
     nash_sutcliffe,
     index_of_agreement,
-    RSS,
+)
+from pytesmo.metrics._fast import (
+    bias,
+    msd_bias,
+    msd_var,
+    msd_corr,
+    msd_decomposition,
+    RSS
 )
 from pytesmo.metrics.pairwise_utils import (
     has_analytical_ci,
