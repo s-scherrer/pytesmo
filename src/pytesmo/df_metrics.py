@@ -33,14 +33,17 @@ If the DataFrame has more columns than the function has input parameters
 the function will be applied pairwise, resp. to triples.
 """
 
-import numpy as np
-import pytesmo.metrics as metrics
 from collections import namedtuple, OrderedDict
 from collections.abc import Iterable
 import itertools
+import numpy as np
 import pandas as pd
+from scipy import stats
 import warnings
-from pytesmo.utils import array_dropna
+
+import pytesmo.metrics as metrics
+from pytesmo.utils import array_dropna, deprecated
+
 
 def n_combinations(iterable, n, must_include=None, permutations=False):
     """
@@ -79,74 +82,77 @@ def n_combinations(iterable, n, must_include=None, permutations=False):
         combs = combs_filtered
     return combs
 
-def bias(df):
-    """Bias
+
+def _wrap_metric(metric, symmetric=True):
+    """
+    Wraps a metric function to be called by only providing a dataframe.
+
+    Parameters
+    ----------
+    metric : callable
+        Metric function from pytesmo.metrics
+    symmetric : bool, optional
+        Whether the metric is symmetrical w.r.t to the order of input
+        arguments. Default is ``True``.
 
     Returns
     -------
-    bias : pandas.Dataframe
-        of shape (len(df.columns),len(df.columns))
-    See Also
-    --------
-    pytesmo.metrics.bias
+    wrapped : callable
+        New function that takes a dataframe as input and returns the metric
+        value(s) as named tuple.
+        The name of the function is the same as the input function name.
     """
-    return _dict_to_namedtuple(nwise_apply(df, metrics.bias, n=2, comm=False),
-                               'bias')
+    def wrapped(df):
+        return _dict_to_namedtuple(
+            nwise_apply(df, metric, n=2, comm=symmetric),
+            metric.__name__
+        )
+    # add name and docstring
+    name = metric.__name__
+    wrapped.__name__ = name
+    wrapped.__doc__ = f"""
+    Wrapper to call :py:func:`pytesmo.metrics.{name}` on a dataframe
 
-def rmsd(df):
-    """Root-mean-square deviation
-
-    Returns
-    -------
-    result : namedtuple
-        with column names of df for which the calculation
-        was done as name of the
-        element separated by '_and_'
-
-    See Also
-    --------
-    pytesmo.metrics.rmsd
-    """
-    return _dict_to_namedtuple(nwise_apply(df, metrics.rmsd, n=2, comm=True),
-                               'rmsd')
-
-def nrmsd(df):
-    """Normalized root-mean-square deviation
-
-    Returns
-    -------
-    result : namedtuple
-        with column names of df for which the calculation
-        was done as name of the
-        element separated by '_and_'
-
-    See Also
-    --------
-    pytesmo.metrics.nrmsd
-    """
-    return _dict_to_namedtuple(nwise_apply(df, metrics.nrmsd, n=2, comm=True),
-                               'nrmsd')
-
-def ubrmsd(df):
-    """Unbiased root-mean-square deviation
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Dataframe for whose columns combinations the metric should be
+        evaluated.
 
     Returns
     -------
     result : namedtuple
-        with column names of df for which the calculation
-        was done as name of the
-        element separated by '_and_'
+        Metric values for the different combinations. Member names are `df`'s
+        column names separated by '_and_'.
 
-    See Also
-    --------
-    pytesmo.metrics.ubrmsd
+    See also :py:func:`pytesmo.metrics.{name}` docstring.
     """
-    return _dict_to_namedtuple(nwise_apply(df, metrics.ubrmsd, n=2, comm=True),
-                               'ubrmsd')
+    return wrapped
 
+
+# add functions that are simple to wrap to the module
+bias = _wrap_metric(metrics.bias, symmetric=False)
+msd = _wrap_metric(metrics.msd)
+rmsd = _wrap_metric(metrics.rmsd)
+nrmsd = _wrap_metric(metrics.nrmsd)
+ubrmsd = _wrap_metric(metrics.ubrmsd)
+msd_corr = _wrap_metric(metrics.msd_corr)
+msd_var = _wrap_metric(metrics.msd_var)
+msd_bias = _wrap_metric(metrics.msd_bias)
+pearson_r = _wrap_metric(metrics.pearson_r)
+spearman_r = _wrap_metric(metrics.spearman_r)
+kendall_tau = _wrap_metric(metrics.kendall_tau)
+nash_sutcliffe = _wrap_metric(metrics.nash_sutcliffe)
+
+
+@deprecated
 def mse(df):
-    """Mean square error (MSE) as a decomposition of the RMSD into
-    individual error components
+    """
+    Deprecated: use :py:func:`pytesmo.df_metrics.msd` and the functions for the
+    individual components instead.
+
+    Mean square error (MSE) as a decomposition of the RMSD into individual
+    error components
 
     Returns
     -------
@@ -166,8 +172,12 @@ def mse(df):
             _dict_to_namedtuple(MSEbias, 'MSEbias'),
             _dict_to_namedtuple(MSEvar, 'MSEvar'))
 
+
+@deprecated
 def tcol_error(df):
     """
+    Deprecated: use :py:func:`pytesmo.df_metrics.tcol_metrics` instead.
+
     Triple collocation error estimate, applied to triples of columns of the
     passed data frame.
 
@@ -198,10 +208,15 @@ def tcol_error(df):
     return tuple(errors)
 
 
+@deprecated
 def tcol_snr(df, ref_ind=0):
+    """DEPRECATED: use `tcol_metrics` instead."""
+    return tcol_metrics(df, ref_ind=0)
+
+
+def tcol_metrics(df, ref_ind=0):
     """
-    Triple Collocation based SNR estimation, applied to triples of columns of the
-    passed data frame.
+    Triple Collocation metrics applied to triples of dataframe columns.
 
     Parameters
     ----------
@@ -224,17 +239,20 @@ def tcol_snr(df, ref_ind=0):
     """
     # For TC, the input order has NO effect --> comm=True
     if ref_ind is not None:
-        # This column must be part of each triple and is always used as the reference
+        # This column must be part of each triple and is always used as the
+        # reference
         incl = [ref_ind]
     else:
-        # All unique triples are processed, the first dataset of a triple is the reference.
+        # All unique triples are processed, the first dataset of a triple is
+        # the reference.
         incl = None
         ref_ind = 0
-    snr, err, beta = nwise_apply(df, metrics.tcol_snr, n=3, comm=True,
+    snr, err, beta = nwise_apply(df, metrics.tcol_metrics, n=3, comm=True,
                                  must_include=incl, ref_ind=ref_ind)
 
     results = {}
-    for var_name, var_vals in {'snr': snr, 'err_std_dev' : err, 'beta' : beta}.items():
+    var_dict = {'snr': snr, 'err_std_dev' : err, 'beta' : beta}
+    for var_name, var_vals in var_dict.items():
         results[var_name] = []
         for trip, res in var_vals.items():
             Inner = namedtuple(var_name, OrderedDict(zip(trip, res)))
@@ -292,7 +310,7 @@ def pearsonr(df):
     pytesmo.metrics.pearsonr
     scipy.stats.pearsonr
     """
-    r, p = nwise_apply(df, metrics.pearsonr, n=2, comm=True)
+    r, p = nwise_apply(df, stats.pearsonr, n=2, comm=True)
     return _dict_to_namedtuple(r, 'Pearsons_r'), _dict_to_namedtuple(p, 'p_value')
 
 def spearmanr(df):
@@ -311,7 +329,7 @@ def spearmanr(df):
     pytesmo.metrics.spearmenr
     scipy.stats.spearmenr
     """
-    r, p = nwise_apply(df, metrics.spearmanr, n=2, comm=True)
+    r, p = nwise_apply(df, stats.spearmanr, n=2, comm=True)
     return _dict_to_namedtuple(r, 'Spearman_r'), _dict_to_namedtuple(p, 'p_value')
 
 def kendalltau(df):
@@ -330,7 +348,7 @@ def kendalltau(df):
     pytesmo.metrics.kendalltau
     scipy.stats.kendalltau
     """
-    r, p = nwise_apply(df, metrics.kendalltau, n=2, comm=True)
+    r, p = nwise_apply(df, stats.kendalltau, n=2, comm=True)
     return _dict_to_namedtuple(r, 'Kendall_tau'), _dict_to_namedtuple(p, 'p_value')
 
 def pairwise_apply(df, method, comm=False):
