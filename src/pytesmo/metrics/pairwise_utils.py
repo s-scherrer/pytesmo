@@ -118,7 +118,25 @@ def with_bootstrapped_ci(metric_func, x, y, alpha=0.05,
         idx = np.random.choice(n, size=n)
         _x, _y = x[idx], y[idx]
         mvals[i] = metric_func(_x, _y)
+    m = metric_func(x, y)
+    if method == "percentile":
+        lower, upper = _percentile_bs_ci(mvals, m, alpha)
+    return m, lower, upper
+
+
+def _percentile_bs_ci(mvals, m, alpha):
+    """Calculates the CI using percentiles"""
     lower = np.quantile(mvals, alpha / 2)
     upper = np.quantile(mvals, 1 - alpha / 2)
-    m = metric_func(x, y)
-    return m, lower, upper
+    return lower, upper
+
+
+def _basic_bs_ci(mvals, m, alpha):
+    """Basic bootstrap"""
+    lower = 2 * m - np.quantile(mvals, 1 - alpha / 2)
+    upper = 2 * m - np.quantile(mvals, alpha / 2)
+    return lower, upper
+
+def _abc_bs_ci(mvals, m, alpha):
+    ...
+    
