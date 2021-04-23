@@ -625,12 +625,15 @@ def testdata_random():
     dr = pd.date_range("2000", "2020", freq="D")
     n = len(dr)
     n_datasets = 4
+
+    # generating random correlated data
     r = 0.8
     C = np.ones((n_datasets, n_datasets)) * r
     for i in range(n_datasets):
         C[i, i] = 1
     A = np.linalg.cholesky(C)
     X = (A @ np.random.randn(n_datasets, n)).T
+
     ref = X[:, 0]
     x1 = X[:, 1]
     x2 = X[:, 2]
